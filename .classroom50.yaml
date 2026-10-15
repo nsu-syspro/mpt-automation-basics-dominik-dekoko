@@ -1,0 +1,12 @@
+schema: "classroom50/repo-config/v1"
+classroom: "mpt"
+assignment: "automation-basics"
+owner:
+  username: "dominik-DeKoko"
+  id: 316467298
+  accepted_at: "2026-10-15T07:44:47Z"
+source:
+  owner: "nsu-syspro"
+  owner_id: 115493553
+  repo: "mpt-automation-basics"
+  branch: "main"

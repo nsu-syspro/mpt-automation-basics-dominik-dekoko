@@ -1,0 +1,43 @@
+# Classroom50 autograder shim, "public" named variant for the mpt classroom.
+#
+# Byte-identical to the built-in default shim (upstream
+# cli/shared/contract/autograde-shim.yaml, rendered for branch "main" as of
+# upstream commit 12bef317) with ONE change: the reusable grading workflow
+# lives in the PUBLIC nsu-syspro/classroom50-autograder repository instead of
+# the private classroom50 config repository. GitHub only lets a public
+# repository use reusable workflows hosted in other public repositories, so
+# this shim keeps autograding working while a student repository is public.
+#
+# NOT updated by `gh teacher init` (it is outside the skeleton tree) and NOT
+# rewritten by the submission-mode retrofit (teacher-authored shims are never
+# rewritten). When upgrading gh-teacher/gh-student, diff upstream's
+# autograde-shim.yaml against this file and re-apply the uses: change if it
+# moved. Existing student repos do not pick up edits to this file
+# automatically: re-run the shim-rewrite script to update them.
+#
+# This file should not be edited.
+#
+# Triggers:
+#   - push to the repo's default branch: every commit grades (except the
+#     acceptance commit, which the runner detects and skips); the runner
+#     creates the submit/<UTC-timestamp>-<short-sha> tag itself
+#   - push of submit/*: manual or web-UI tag pushes work too; the runner
+#     reuses the pushed tag
+
+name: Autograde
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["submit/*"]
+
+jobs:
+  grade:
+    uses: "nsu-syspro/classroom50-autograder/.github/workflows/autograde-runner.yaml@main"
+    permissions:
+      contents: write
+      statuses: write
+      # Lets the runner open the opt-in Feedback PR. A reusable
+      # workflow's token is the intersection with the caller's grants, so
+      # this must mirror autograde-runner.yaml's permissions.
+      pull-requests: write
