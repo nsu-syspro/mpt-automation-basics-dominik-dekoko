@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+set -e
+
+export LC_ALL=C
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ROOT_DIR="$SCRIPT_DIR/../.."
+
+TMP_DIR=$(mktemp -d)
+
+######################
+
+mkdir -p "$TMP_DIR"
+shopt -s dotglob # include dotfiles
+cp -r "$ROOT_DIR"/* "$TMP_DIR"
+shopt -u dotglob
+cd "$TMP_DIR"
+
+######################
+
+function fail() {
+  echo "$@"
+  exit 1
+}
+
+function assert_no_changes() {
+  make -q || fail "make detected changes, but should not"
+}
+
+function assert_has_changes() {
+  ! make -q || fail "make did not detect any changes, but should"
+}
+
+function check_empty_test_output() {
+  EXPECTED=""
+
+  set +e
+  ACTUAL=$(make check 2>&1)
+  ACTUAL_EXIT=$?
+  set -e
+  if [[ $ACTUAL_EXIT -ne 0 ]]; then
+    echo "make check"
+    echo "$ACTUAL"
+    fail
+  fi
+  diff -U 1000 <(echo "$EXPECTED") <(echo "$ACTUAL") || fail
+}
+
+function check_test_output_contains() {
+  EXPECTED_STR="$1"
+
+  set +e
+  ACTUAL=$(make check 2>&1)
+  ACTUAL_EXIT=$?
+  set -e
+  if [[ $ACTUAL_EXIT -eq 0 ]]; then
+    echo "make check"
+    echo "$ACTUAL"
+    fail "expected to fail after incorrect change in one of the tests"
+  fi
+  if ! echo "$ACTUAL" | grep "$EXPECTED_STR" >/dev/null; then
+    echo "make check"
+    echo "$ACTUAL"
+    fail "expected to see diff in case of test failure"
+  fi
+}
+
+
+echo "Test case #1 (make check)"
+
+assert_has_changes
+make -s check
+assert_no_changes
+
+echo "Test case #2 (make clean check)"
+
+assert_no_changes
+make -s clean check
+assert_no_changes
+
+echo "Test case #3 (no output for successful make check)"
+
+assert_no_changes
+check_empty_test_output
+assert_no_changes
+
+echo "Test case #4 (no changes outside of 'build' after make check)"
+
+assert_no_changes
+make check
+assert_no_changes
+diff -qr --exclude=build "$ROOT_DIR" "$TMP_DIR" || fail
+
+echo "Test case #5 (make check fails for incorrect tests)"
+
+assert_no_changes
+BAD_STR=$(date +%s)
+echo "$BAD_STR" > "$TMP_DIR/test/empty.expected"
+assert_no_changes
+check_test_output_contains "$BAD_STR"
+assert_no_changes
+echo "0" > "$TMP_DIR/test/empty.expected"
+
+echo "Test case #6 (make check fails for new incorrect tests)"
+
+assert_no_changes
+BAD_STR=$(date +%s)
+echo "$BAD_STR" > "$TMP_DIR/test/bad.expected"
+echo "" > "$TMP_DIR/test/bad.txt"
+assert_no_changes
+check_test_output_contains "$BAD_STR"
+assert_no_changes
+

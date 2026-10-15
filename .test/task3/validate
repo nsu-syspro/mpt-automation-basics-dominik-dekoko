@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -e
+
+export LC_ALL=C
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ROOT_DIR="$SCRIPT_DIR/../.."
+
+TMP_DIR=$(mktemp -d)
+
+######################
+
+mkdir -p "$TMP_DIR"
+shopt -s dotglob # include dotfiles
+cp -r "$ROOT_DIR"/* "$TMP_DIR"
+shopt -u dotglob
+cd "$TMP_DIR"
+
+######################
+
+function fail() {
+  echo "$@"
+  exit 1
+}
+
+function build_docker() {
+  docker build --network host -t wordcount .
+}
+
+function run_docker() {
+  docker run --rm -i wordcount
+}
+
+function run_docker_bash() {
+  echo "$@" | docker run --rm -i --entrypoint /bin/bash wordcount
+}
+
+function check_docker_test() {
+  TEST_NAME="$1"
+  EXPECTED=$(cat "$TMP_DIR/test/$TEST_NAME.expected")
+
+  set +e
+  ACTUAL=$(run_docker <"$TMP_DIR/test/$TEST_NAME.txt" 2>&1)
+  ACTUAL_EXIT=$?
+  set -e
+  if [[ $ACTUAL_EXIT -ne 0 ]]; then
+    echo "docker run --rm -i wordcount < $TMP_DIR/test/$TEST_NAME.txt"
+    echo "$ACTUAL"
+    fail
+  fi
+  diff -U 1000 <(echo "$EXPECTED") <(echo "$ACTUAL") || fail
+}
+
+
+echo "Test case #1 (docker build)"
+
+build_docker
+
+echo "Test case #2 (check test/empty.txt)"
+
+check_docker_test "empty"
+
+echo "Test case #3 (check test/foobar.txt)"
+
+check_docker_test "foobar"
+
+echo "Test case #4 (docker build requires make test)"
+
+BAD_STR=$(date +%s)
+echo "$BAD_STR" > "$TMP_DIR/test/empty.expected"
+! build_docker || fail "expected docker build to fail if tests fail"
+echo "Success"
+
+echo "Test case #5 (task1 validation passes in docker image)"
+
+echo ">>> Inside docker"
+run_docker_bash "make clean && uname -a && bash .test/task1/validate"
+echo "<<<"
+
+echo "Test case #6 (task2 validation passes in docker image)"
+
+echo ">>> Inside docker"
+run_docker_bash "make clean && uname -a && bash .test/task2/validate"
+echo "<<<"

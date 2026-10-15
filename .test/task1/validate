@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+set -e
+
+export LC_ALL=C
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ROOT_DIR="$SCRIPT_DIR/../.."
+
+TMP_DIR=$(mktemp -d)
+
+######################
+
+mkdir -p "$TMP_DIR"
+shopt -s dotglob # include dotfiles
+cp -r "$ROOT_DIR"/* "$TMP_DIR"
+shopt -u dotglob
+cd "$TMP_DIR"
+
+######################
+
+function fail() {
+  echo "$@"
+  exit 1
+}
+
+function assert_no_changes() {
+  make -q || fail "make detected changes, but should not"
+}
+
+function assert_has_changes() {
+  ! make -q || fail "make did not detect any changes, but should"
+}
+
+function check_version() {
+  NAME="$1"
+  VERSION="$2"
+  APP="$TMP_DIR/build/$NAME"
+
+  EXPECTED="$NAME version $VERSION"
+
+  set +e
+  ACTUAL=$("$APP" -v 2>&1)
+  ACTUAL_EXIT=$?
+  set -e
+  if [[ $ACTUAL_EXIT -ne 0 ]]; then
+    echo "$APP -v 2>&1"
+    echo "$ACTUAL"
+    fail
+  fi
+  diff -U 1000 <(echo "$EXPECTED") <(echo "$ACTUAL") || fail
+}
+
+
+echo "Test case #1 (make and check version)"
+
+assert_has_changes
+make -s
+check_version "wordcount" "1.0.0"
+assert_no_changes
+
+echo "Test case #2 (make clean)"
+
+assert_no_changes
+make -s clean
+assert_has_changes
+
+echo "Test case #3 (no changes outside of 'build' after make)"
+
+assert_has_changes
+make -s
+assert_no_changes
+diff -qr --exclude=build "$ROOT_DIR" "$TMP_DIR" || fail
+
+echo "Test case #4 (no changes outside of 'build' after make clean)"
+
+assert_no_changes
+make -s clean
+assert_has_changes
+diff -qr --exclude=build "$ROOT_DIR" "$TMP_DIR" || fail
+
+echo "Test case #5 (make all)"
+
+assert_has_changes
+make -s all
+assert_no_changes
+
+echo "Test case #6 (make after change in src/wordcount.c)"
+
+assert_no_changes
+touch "$TMP_DIR/src/wordcount.c"
+assert_has_changes
+make -s
+check_version "wordcount" "1.0.0"
+assert_no_changes
+
+echo "Test case #7 (make after name change to 'words')"
+
+assert_no_changes
+sed -i 's/wordcount/words/' "$TMP_DIR/config.json"
+assert_has_changes
+make -s
+check_version "words" "1.0.0"
+assert_no_changes
+
+echo "Test case #8 (make after version change to '1.0.1')"
+
+assert_no_changes
+sed -i 's/1.0.0/1.0.1/' "$TMP_DIR/config.json"
+assert_has_changes
+make -s
+check_version "words" "1.0.1"
+assert_no_changes
+
