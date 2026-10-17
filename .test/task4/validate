@@ -13,8 +13,11 @@ cd "$ROOT_DIR"
 
 echo "Check existence of GitHub actions workflow"
 
-WORKFLOWS=$(find '.github/workflows/' -path '.github/workflows/autograde.yml' -path '.github/workflows/shellcheck.yml' -prune -o -name '*.yml' -print)
+WORKFLOWS=$(find '.github/workflows/' \
+  -name '*.yml' -o -name '*.yaml' \
+  | grep -v -e '\.github/workflows/autograde\.yaml$' \
+            -e '\.github/workflows/shellcheck\.yml$')
 echo "$WORKFLOWS"
 
 [[ -n "$WORKFLOWS" ]] \
-  || (echo "No workflow found except for classroom.yml" && exit 1)
+  || (echo "No workflow found except for autograde.yaml and shellcheck.yml" && exit 1)
